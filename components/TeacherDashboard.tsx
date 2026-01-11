@@ -1,114 +1,124 @@
 
 import React, { useState } from 'react';
-import { AppData, StudentRegistry, Subject } from '../types';
+import { AppData, StudentRegistry, Subject, AssessmentRecord, AssessmentType } from '../types';
 import SubjectDetail from './SubjectDetail';
 
 interface Props {
   data: AppData;
   onUpdateRegistry: (registry: StudentRegistry[]) => void;
+  onUpdateCalendar: (events: AssessmentRecord[]) => void;
 }
 
-const TeacherDashboard: React.FC<Props> = ({ data, onUpdateRegistry }) => {
-  const [searchTerm, setSearchTerm] = useState('');
+const GRADES = [
+  '6º Ano Fundamental', '7º Ano Fundamental', '8º Ano Fundamental', '9º Ano Fundamental',
+  '1º Ano Médio', '2º Ano Médio', '3º Ano Médio'
+];
+
+const TeacherDashboard: React.FC<Props> = ({ data, onUpdateRegistry, onUpdateCalendar }) => {
+  const [selectedGrade, setSelectedGrade] = useState<string | null>(null);
+  const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
+  const [view, setView] = useState<'menu' | 'grades' | 'calendar' | 'announcement'>('menu');
   const [selectedStudent, setSelectedStudent] = useState<StudentRegistry | null>(null);
-  const [activeSubject, setActiveSubject] = useState<Subject | null>(null);
-  const [currentTrimester, setCurrentTrimester] = useState<1 | 2 | 3>(data.currentTrimester);
+  const [eventForm, setEventForm] = useState({ type: 'AV1' as AssessmentType, date: '', content: '' });
 
-  // Simulação de base de dados de alunos caso não exista
-  const registry = data.studentsRegistry || [
-    { id: '1', name: 'João Silva', grade: '1º Ano Médio', subjects: data.subjects },
-    { id: '2', name: 'Maria Oliveira', grade: '1º Ano Médio', subjects: [] },
-    { id: '3', name: 'Pedro Santos', grade: '9º Ano Fundamental', subjects: [] }
-  ];
+  // Minhas matérias baseadas no que escolhi no login
+  const mySubjects = data.user?.assignedSubjects || [];
+  const subjectsObjects = data.subjects.filter(s => mySubjects.includes(s.id));
 
-  const filteredStudents = registry.filter(s => 
-    s.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    s.grade.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Simulação de alunos para a turma selecionada
+  const students = data.studentsRegistry.filter(s => s.grade === selectedGrade);
+
+  const activeSubject = subjectsObjects.find(s => s.id === selectedSubjectId);
 
   const handleUpdateStudentSubject = (updatedSubject: Subject) => {
     if (!selectedStudent) return;
-    
-    const updatedSubjects = selectedStudent.subjects.map(s => 
-      s.id === updatedSubject.id ? updatedSubject : s
-    );
-
-    const updatedRegistry = registry.map(student => 
-      student.id === selectedStudent.id ? { ...student, subjects: updatedSubjects } : student
-    );
-
+    const updatedRegistry = data.studentsRegistry.map(student => {
+      if (student.id === selectedStudent.id) {
+        const updatedSubjects = student.subjects.map(s => s.id === updatedSubject.id ? updatedSubject : s);
+        return { ...student, subjects: updatedSubjects };
+      }
+      return student;
+    });
     onUpdateRegistry(updatedRegistry);
-    setSelectedStudent({ ...selectedStudent, subjects: updatedSubjects });
-    setActiveSubject(updatedSubject);
+    setSelectedStudent(prev => prev ? { ...prev, subjects: prev.subjects.map(s => s.id === updatedSubject.id ? updatedSubject : s) } : null);
   };
 
-  if (activeSubject && selectedStudent) {
+  const createEvent = () => {
+    if (!selectedGrade || !selectedSubjectId || !eventForm.date) return;
+    const newEvent: AssessmentRecord = {
+      id: Date.now().toString(),
+      subjectId: selectedSubjectId,
+      subjectName: activeSubject?.name,
+      type: eventForm.type,
+      date: eventForm.date,
+      content: eventForm.content,
+      grade: 0,
+      targetGrade: selectedGrade,
+      teacherId: data.user?.email
+    };
+    onUpdateCalendar([...data.calendar, newEvent]);
+    setView('menu');
+    setEventForm({ type: 'AV1', date: '', content: '' });
+  };
+
+  // Se estiver lançando notas para um aluno específico
+  if (selectedStudent && activeSubject) {
+    const studentSpecificSubject = selectedStudent.subjects.find(s => s.id === activeSubject.id) || activeSubject;
     return (
       <div className="animate-in slide-in-from-right duration-300">
         <div className="bg-amber-100 text-amber-800 p-4 rounded-2xl mb-6 flex items-center justify-between border border-amber-200">
-          <span className="text-xs font-black uppercase tracking-widest">Lançando Notas para: <b>{selectedStudent.name}</b></span>
-          <button onClick={() => setActiveSubject(null)} className="font-bold text-xs uppercase underline">Sair da Matéria</button>
+          <span className="text-xs font-black uppercase tracking-widest">Lançando em <b>{activeSubject.name}</b> para: <b>{selectedStudent.name}</b></span>
+          <button onClick={() => setSelectedStudent(null)} className="font-bold text-xs uppercase underline">Voltar</button>
         </div>
         <SubjectDetail 
-          subject={activeSubject}
-          currentTrimester={currentTrimester}
-          onBack={() => setActiveSubject(null)}
+          subject={studentSpecificSubject}
+          currentTrimester={data.currentTrimester}
+          onBack={() => setSelectedStudent(null)}
           onUpdate={handleUpdateStudentSubject}
         />
       </div>
     );
   }
 
-  if (selectedStudent) {
+  // Se não escolheu turma ou matéria ainda
+  if (!selectedGrade || !selectedSubjectId) {
     return (
-      <div className="space-y-6 animate-in fade-in duration-300">
-        <header className="flex items-center justify-between">
-          <button onClick={() => setSelectedStudent(null)} className="text-slate-400 font-bold flex items-center space-x-2">
-            <span>← Voltar para Lista</span>
-          </button>
-          <div className="flex bg-slate-200 p-1 rounded-lg">
-            {[1, 2, 3].map(t => (
-              <button
-                key={t}
-                onClick={() => setCurrentTrimester(t as 1 | 2 | 3)}
-                className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${currentTrimester === t ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
-              >
-                {t}º Trim
-              </button>
-            ))}
-          </div>
+      <div className="space-y-6">
+        <header>
+          <h1 className="text-3xl font-black text-slate-800 tracking-tighter uppercase">Minhas Turmas</h1>
+          <p className="text-slate-500 font-medium">Selecione uma turma e disciplina para gerenciar.</p>
         </header>
 
-        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-          <div className="flex items-center space-x-4 mb-8">
-            <div className="w-16 h-16 bg-slate-900 text-amber-400 rounded-2xl flex items-center justify-center text-2xl font-black">
-              {selectedStudent.name.charAt(0)}
-            </div>
-            <div>
-              <h2 className="text-2xl font-black text-slate-800 tracking-tighter uppercase">{selectedStudent.name}</h2>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{selectedStudent.grade}</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">1. Selecione a Turma</h3>
+            <div className="grid grid-cols-1 gap-2">
+              {GRADES.map(g => (
+                <button 
+                  key={g} 
+                  onClick={() => setSelectedGrade(g)}
+                  className={`text-left p-4 rounded-xl font-bold text-sm transition-all ${selectedGrade === g ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}`}
+                >
+                  {g}
+                </button>
+              ))}
             </div>
           </div>
 
-          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Selecione a Disciplina para Lançar Notas</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {selectedStudent.subjects.length > 0 ? selectedStudent.subjects.map(subject => (
-              <button 
-                key={subject.id}
-                onClick={() => setActiveSubject(subject)}
-                className="flex items-center justify-between p-5 bg-slate-50 rounded-2xl border border-slate-100 hover:border-amber-400 hover:bg-white transition-all text-left group"
-              >
-                <div className="flex items-center space-x-3">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: subject.color }}></div>
-                  <span className="font-bold text-slate-700">{subject.name}</span>
-                </div>
-                <span className="text-slate-300 group-hover:text-amber-500">✎</span>
-              </button>
-            )) : (
-              <p className="text-sm text-slate-400 italic col-span-2 py-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                Nenhuma disciplina vinculada a este aluno.
-              </p>
-            )}
+          <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">2. Selecione a Disciplina</h3>
+            <div className="grid grid-cols-1 gap-2">
+              {subjectsObjects.map(s => (
+                <button 
+                  key={s.id} 
+                  onClick={() => setSelectedSubjectId(s.id)}
+                  className={`text-left p-4 rounded-xl font-bold text-sm transition-all flex items-center space-x-3 ${selectedSubjectId === s.id ? 'bg-amber-400 text-slate-900' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}`}
+                >
+                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: s.color }}></div>
+                  <span>{s.name}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -117,80 +127,130 @@ const TeacherDashboard: React.FC<Props> = ({ data, onUpdateRegistry }) => {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <header>
-        <div className="flex items-center space-x-2 mb-1">
-          <span className="text-[10px] font-black text-amber-500 uppercase tracking-[0.2em]">Área Docente</span>
-          <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></div>
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <button onClick={() => { setSelectedGrade(null); setSelectedSubjectId(null); setView('menu'); }} className="text-xs font-bold text-indigo-600 uppercase mb-1">← Mudar Turma/Disciplina</button>
+          <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">{selectedGrade}</h1>
+          <div className="flex items-center space-x-2">
+            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: activeSubject?.color }}></div>
+            <p className="text-sm font-bold text-slate-500 uppercase">{activeSubject?.name}</p>
+          </div>
         </div>
-        <h1 className="text-3xl font-black text-slate-800 uppercase tracking-tighter">Gestão Acadêmica</h1>
-        <p className="text-slate-500 font-medium">Lançamento de notas e acompanhamento de turmas.</p>
+
+        <div className="flex bg-slate-200 p-1 rounded-xl">
+          <button onClick={() => setView('menu')} className={`px-4 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${view === 'menu' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>Início</button>
+          <button onClick={() => setView('grades')} className={`px-4 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${view === 'grades' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>Notas</button>
+          <button onClick={() => setView('calendar')} className={`px-4 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${view === 'calendar' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>Agenda</button>
+        </div>
       </header>
 
-      <div className="relative">
-        <input 
-          type="text" 
-          placeholder="Buscar aluno por nome ou turma..."
-          value={searchTerm}
-          onChange={e => setSearchTerm(e.target.value)}
-          className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 shadow-sm outline-none focus:ring-2 focus:ring-amber-400 transition-all font-medium text-slate-800 pr-12"
-        />
-        <span className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-300">🔍</span>
-      </div>
-
-      <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
-        <table className="w-full text-left">
-          <thead className="bg-slate-50 border-b border-slate-100">
-            <tr>
-              <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Aluno</th>
-              <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest hidden sm:table-cell">Série</th>
-              <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Ação</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50">
-            {filteredStudents.map(student => (
-              <tr key={student.id} className="hover:bg-slate-50/50 transition-colors">
-                <td className="px-6 py-4">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-xs font-black text-slate-500">
-                      {student.name.charAt(0)}
-                    </div>
-                    <div>
-                      <p className="font-bold text-slate-800 text-sm">{student.name}</p>
-                      <p className="text-[10px] text-slate-400 sm:hidden uppercase font-bold">{student.grade}</p>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4 hidden sm:table-cell">
-                  <span className="text-xs font-bold text-slate-500 uppercase">{student.grade}</span>
-                </td>
-                <td className="px-6 py-4 text-right">
-                  <button 
-                    onClick={() => setSelectedStudent(student)}
-                    className="bg-slate-900 text-amber-400 text-[10px] font-black px-4 py-2 rounded-xl uppercase tracking-widest hover:bg-slate-800 transition-all"
-                  >
-                    Lançar Notas
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {filteredStudents.length === 0 && (
-              <tr>
-                <td colSpan={3} className="px-6 py-12 text-center text-slate-400 italic text-sm">Nenhum aluno encontrado.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="bg-amber-50 p-6 rounded-[2rem] border border-amber-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h4 className="text-sm font-black text-amber-900 uppercase tracking-widest mb-1">Dica de Produtividade</h4>
-          <p className="text-xs text-amber-800/80 leading-relaxed">Você pode exportar a planilha de notas geral na aba de configurações para relatórios mensais.</p>
+      {view === 'menu' && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <ActionCard title="Lançar Notas" icon="📝" onClick={() => setView('grades')} color="bg-indigo-50 text-indigo-600" />
+          <ActionCard title="Agendar Prova" icon="📅" onClick={() => setView('calendar')} color="bg-amber-50 text-amber-600" />
+          <ActionCard title="Enviar Aviso" icon="📣" onClick={() => setView('announcement')} color="bg-emerald-50 text-emerald-600" />
         </div>
-        <div className="w-12 h-12 bg-amber-400/20 rounded-2xl flex items-center justify-center text-xl">💡</div>
-      </div>
+      )}
+
+      {view === 'grades' && (
+        <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
+          <table className="w-full text-left">
+            <thead className="bg-slate-50 border-b border-slate-100">
+              <tr>
+                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Aluno</th>
+                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Ação</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {students.map(s => (
+                <tr key={s.id} className="hover:bg-slate-50 transition-colors">
+                  <td className="px-6 py-4 font-bold text-slate-700">{s.name}</td>
+                  <td className="px-6 py-4 text-right">
+                    <button onClick={() => setSelectedStudent(s)} className="bg-slate-900 text-amber-400 text-[10px] font-black px-4 py-2 rounded-xl uppercase tracking-widest">Ver Boletim</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {view === 'calendar' && (
+        <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm max-w-xl mx-auto">
+          <h3 className="text-xl font-black text-slate-800 uppercase tracking-tighter mb-6">Novo Evento na Agenda</h3>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Tipo</label>
+              <div className="flex gap-2">
+                {['AV1', 'AV2', 'PAT', 'TRABALHO'].map(t => (
+                  <button 
+                    key={t}
+                    onClick={() => setEventForm({...eventForm, type: t as AssessmentType})}
+                    className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all ${eventForm.type === t ? 'bg-slate-900 text-amber-400 shadow-md' : 'bg-slate-50 text-slate-400'}`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Data</label>
+              <input type="date" value={eventForm.date} onChange={e => setEventForm({...eventForm, date: e.target.value})} className="w-full bg-slate-50 border-none rounded-xl p-4 font-bold text-slate-800" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Conteúdo Programático</label>
+              <textarea 
+                value={eventForm.content} 
+                onChange={e => setEventForm({...eventForm, content: e.target.value})} 
+                placeholder="O que será cobrado?"
+                className="w-full bg-slate-50 border-none rounded-xl p-4 font-medium text-slate-700 h-32 resize-none"
+              />
+            </div>
+            <button onClick={createEvent} className="w-full bg-slate-900 text-amber-400 font-black py-4 rounded-2xl uppercase tracking-widest shadow-xl">Confirmar Agendamento</button>
+          </div>
+        </div>
+      )}
+
+      {view === 'announcement' && (
+        <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm max-w-xl mx-auto">
+          <h3 className="text-xl font-black text-slate-800 uppercase tracking-tighter mb-6">Enviar Aviso para a Turma</h3>
+          <div className="space-y-4">
+            <textarea 
+              placeholder="Digite aqui o comunicado importante..."
+              className="w-full bg-slate-50 border-none rounded-xl p-4 font-medium text-slate-700 h-40 resize-none"
+              onChange={e => setEventForm({...eventForm, content: e.target.value})}
+            ></textarea>
+            <button 
+              onClick={() => {
+                const newAviso: AssessmentRecord = {
+                  id: Date.now().toString(),
+                  subjectId: selectedSubjectId!,
+                  subjectName: activeSubject?.name,
+                  type: 'AVISO',
+                  date: new Date().toISOString().split('T')[0],
+                  content: eventForm.content,
+                  grade: 0,
+                  targetGrade: selectedGrade!
+                };
+                onUpdateCalendar([...data.calendar, newAviso]);
+                setView('menu');
+              }}
+              className="w-full bg-emerald-600 text-white font-black py-4 rounded-2xl uppercase tracking-widest shadow-xl shadow-emerald-600/20"
+            >
+              Publicar Aviso 📣
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+
+const ActionCard: React.FC<{ title: string, icon: string, onClick: () => void, color: string }> = ({ title, icon, onClick, color }) => (
+  <button onClick={onClick} className={`p-8 rounded-[2.5rem] flex flex-col items-center justify-center text-center transition-all hover:scale-105 active:scale-95 shadow-sm border border-slate-100 ${color}`}>
+    <span className="text-4xl mb-4">{icon}</span>
+    <span className="font-black uppercase tracking-widest text-xs">{title}</span>
+  </button>
+);
 
 export default TeacherDashboard;

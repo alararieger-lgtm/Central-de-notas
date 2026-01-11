@@ -16,7 +16,11 @@ const StudyCenter: React.FC<Props> = ({ data, onUpdateSession, onUpdateGroups })
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
   const [msgInput, setMsgInput] = useState('');
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
-  const [newGroupData, setNewGroupData] = useState({ name: '', desc: '' });
+  const [newGroupData, setNewGroupData] = useState({ 
+    name: '', 
+    desc: '', 
+    privacy: 'public' as 'public' | 'private' 
+  });
 
   useEffect(() => {
     if (isRunning) {
@@ -55,11 +59,12 @@ const StudyCenter: React.FC<Props> = ({ data, onUpdateSession, onUpdateGroups })
       membersCount: 1,
       description: newGroupData.desc,
       category: 'Extra',
+      privacy: newGroupData.privacy,
       messages: []
     };
     onUpdateGroups([...data.studyGroups, newGroup]);
     setIsCreatingGroup(false);
-    setNewGroupData({ name: '', desc: '' });
+    setNewGroupData({ name: '', desc: '', privacy: 'public' });
   };
 
   const activeGroup = data.studyGroups.find(g => g.id === activeGroupId);
@@ -126,21 +131,31 @@ const StudyCenter: React.FC<Props> = ({ data, onUpdateSession, onUpdateGroups })
         </div>
       ) : (
         <div className="flex flex-col lg:grid lg:grid-cols-4 gap-4 h-[calc(100vh-250px)] min-h-[500px]">
-          {/* List of groups - Scrollable only this part */}
+          {/* List of groups */}
           <div className={`${activeGroupId && 'hidden lg:flex'} bg-white rounded-[1.5rem] border border-slate-200 overflow-hidden flex flex-col shadow-sm`}>
             <div className="p-4 border-b border-slate-100 flex items-center justify-between">
               <h3 className="font-black text-slate-800 uppercase text-[10px] tracking-widest">Grupos</h3>
-              <button onClick={() => setIsCreatingGroup(true)} className="w-8 h-8 flex items-center justify-center bg-indigo-50 text-indigo-600 rounded-full font-bold">+</button>
+              <button 
+                onClick={() => setIsCreatingGroup(true)} 
+                className="w-10 h-10 flex items-center justify-center bg-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-indigo-600/20 active:scale-90 transition-all"
+              >
+                +
+              </button>
             </div>
             <div className="flex-1 overflow-y-auto p-2 space-y-1">
               {data.studyGroups.map(group => (
                 <button 
                   key={group.id}
                   onClick={() => setActiveGroupId(group.id)}
-                  className={`w-full text-left p-4 rounded-xl transition-all ${activeGroupId === group.id ? 'bg-slate-900 text-white shadow-md' : 'hover:bg-slate-50'}`}
+                  className={`w-full text-left p-4 rounded-xl transition-all border ${activeGroupId === group.id ? 'bg-slate-900 border-slate-900 text-white shadow-md' : 'bg-transparent border-transparent hover:bg-slate-50'}`}
                 >
-                  <p className="text-[8px] font-black uppercase tracking-widest opacity-60 mb-1">{group.category}</p>
-                  <span className="font-bold block text-sm">{group.name}</span>
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-[8px] font-black uppercase tracking-widest opacity-60">{group.category}</p>
+                    <span className="text-[10px] opacity-70">
+                      {group.privacy === 'private' ? '🔒' : '🌐'}
+                    </span>
+                  </div>
+                  <span className="font-bold block text-sm leading-tight">{group.name}</span>
                 </button>
               ))}
             </div>
@@ -153,12 +168,21 @@ const StudyCenter: React.FC<Props> = ({ data, onUpdateSession, onUpdateGroups })
                 <div className="p-4 border-b border-slate-100 flex items-center space-x-3">
                   <button onClick={() => setActiveGroupId(null)} className="lg:hidden text-indigo-600 font-bold p-2">←</button>
                   <div className="flex-1">
-                    <h2 className="font-black text-slate-800 uppercase tracking-tighter text-sm truncate">{activeGroup.name}</h2>
-                    <p className="text-[10px] text-slate-400 font-medium">{activeGroup.membersCount} participantes</p>
+                    <div className="flex items-center space-x-2">
+                      <h2 className="font-black text-slate-800 uppercase tracking-tighter text-sm truncate">{activeGroup.name}</h2>
+                      <span className="text-xs">{activeGroup.privacy === 'private' ? '🔒' : '🌐'}</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">{activeGroup.privacy === 'private' ? 'Grupo Privado' : 'Comunidade Pública'} • {activeGroup.membersCount} Membros</p>
                   </div>
                 </div>
                 
                 <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/30">
+                  {activeGroup.messages.length === 0 && (
+                    <div className="flex flex-col items-center justify-center h-full text-slate-300">
+                      <span className="text-4xl mb-4">💬</span>
+                      <p className="text-xs font-bold uppercase tracking-widest">Inicie a conversa!</p>
+                    </div>
+                  )}
                   {activeGroup.messages.map(msg => (
                     <div key={msg.id} className={`flex flex-col ${msg.isMe ? 'items-end' : 'items-start'}`}>
                       {!msg.isMe && <span className="text-[8px] font-black text-slate-400 uppercase mb-1 ml-2">{msg.sender}</span>}
@@ -175,17 +199,89 @@ const StudyCenter: React.FC<Props> = ({ data, onUpdateSession, onUpdateGroups })
                     type="text" 
                     value={msgInput}
                     onChange={e => setMsgInput(e.target.value)}
+                    onKeyPress={e => e.key === 'Enter' && sendMessage()}
                     placeholder="Mensagem..."
                     className="flex-1 bg-slate-50 border-none rounded-xl px-4 py-3 text-sm focus:ring-1 focus:ring-slate-900 outline-none"
                   />
-                  <button onClick={sendMessage} className="w-12 h-12 bg-slate-900 text-amber-400 rounded-xl flex items-center justify-center active:scale-90 transition-transform">🚀</button>
+                  <button onClick={sendMessage} className="w-12 h-12 bg-slate-900 text-amber-400 rounded-xl flex items-center justify-center active:scale-90 transition-transform shadow-lg shadow-slate-900/10">🚀</button>
                 </div>
               </>
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center text-slate-300 p-8 text-center">
-                <p className="text-sm font-black uppercase tracking-widest">Selecione um grupo</p>
+                <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-6 text-3xl">🤝</div>
+                <p className="text-sm font-black uppercase tracking-widest">Escolha um grupo para colaborar</p>
+                <p className="text-xs mt-2 max-w-xs text-slate-400">Tire dúvidas, compartilhe resumos e foque nos objetivos com seus colegas.</p>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Creation Modal */}
+      {isCreatingGroup && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-md rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in-95 duration-300">
+            <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tighter mb-2">Criar Novo Grupo</h2>
+            <p className="text-slate-500 text-sm mb-6">Colabore com seus colegas do Colégio Gaspar.</p>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Nome do Grupo</label>
+                <input 
+                  type="text" 
+                  value={newGroupData.name}
+                  onChange={e => setNewGroupData({...newGroupData, name: e.target.value})}
+                  className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-5 py-3.5 outline-none focus:ring-2 focus:ring-indigo-600 transition-all font-bold text-slate-800"
+                  placeholder="Ex: Foco no ENEM, Turma 101..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Privacidade</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button 
+                    onClick={() => setNewGroupData({...newGroupData, privacy: 'public'})}
+                    className={`p-4 rounded-2xl border-2 flex flex-col items-center justify-center transition-all ${newGroupData.privacy === 'public' ? 'bg-indigo-50 border-indigo-600 text-indigo-700' : 'bg-slate-50 border-transparent text-slate-400'}`}
+                  >
+                    <span className="text-xl mb-1">🌐</span>
+                    <span className="text-[10px] font-black uppercase">Público</span>
+                  </button>
+                  <button 
+                    onClick={() => setNewGroupData({...newGroupData, privacy: 'private'})}
+                    className={`p-4 rounded-2xl border-2 flex flex-col items-center justify-center transition-all ${newGroupData.privacy === 'private' ? 'bg-rose-50 border-rose-600 text-rose-700' : 'bg-slate-50 border-transparent text-slate-400'}`}
+                  >
+                    <span className="text-xl mb-1">🔒</span>
+                    <span className="text-[10px] font-black uppercase">Privado</span>
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Descrição (Opcional)</label>
+                <textarea 
+                  value={newGroupData.desc}
+                  onChange={e => setNewGroupData({...newGroupData, desc: e.target.value})}
+                  className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-5 py-3.5 outline-none focus:ring-2 focus:ring-indigo-600 transition-all font-medium text-slate-700 h-24 resize-none"
+                  placeholder="Sobre o que é este grupo?"
+                />
+              </div>
+
+              <div className="flex space-x-3 pt-4">
+                <button 
+                  onClick={() => setIsCreatingGroup(false)}
+                  className="flex-1 py-4 rounded-2xl font-black text-xs uppercase tracking-widest text-slate-400 hover:bg-slate-50 transition-all"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  onClick={createGroup}
+                  disabled={!newGroupData.name.trim()}
+                  className="flex-1 py-4 bg-slate-900 text-amber-400 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-slate-900/20 active:scale-95 transition-all disabled:opacity-50"
+                >
+                  Criar Grupo
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

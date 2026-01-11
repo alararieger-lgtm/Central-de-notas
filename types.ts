@@ -1,14 +1,17 @@
 
-export type AssessmentType = 'AV1' | 'AV2' | 'PAT';
+export type AssessmentType = 'AV1' | 'AV2' | 'PAT' | 'TRABALHO' | 'AVISO';
 export type UserRole = 'student' | 'teacher';
 
 export interface AssessmentRecord {
   id: string;
   subjectId: string;
+  subjectName?: string;
   type: AssessmentType;
   grade: number;
   date: string;
   content: string;
+  targetGrade: string; // Turma destino (ex: 1º Ano Médio)
+  teacherId?: string;
 }
 
 export interface TrimesterGrades {
@@ -48,6 +51,7 @@ export interface StudyGroup {
   membersCount: number;
   description: string;
   isOfficial?: boolean;
+  privacy: 'public' | 'private';
   category: 'Fundamental' | 'Médio' | 'Extra';
   messages: ChatMessage[];
 }
@@ -58,6 +62,7 @@ export interface UserProfile {
   role: UserRole;
   email?: string;
   avatar?: string;
+  assignedSubjects?: string[]; // IDs das matérias que o professor leciona
 }
 
 // Representação de um aluno para o professor
@@ -70,12 +75,12 @@ export interface StudentRegistry {
 
 export interface AppData {
   user: UserProfile | null;
-  subjects: Subject[];
+  subjects: Subject[]; // No caso do aluno, suas matérias. No caso do professor, todas as disponíveis para vincular.
   calendar: AssessmentRecord[];
   currentTrimester: 1 | 2 | 3;
   studySession: StudySession;
   studyGroups: StudyGroup[];
-  studentsRegistry?: StudentRegistry[]; // Apenas para professores
+  studentsRegistry: StudentRegistry[];
 }
 
 export enum PerformanceStatus {

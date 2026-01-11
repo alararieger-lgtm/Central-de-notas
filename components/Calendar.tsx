@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { AssessmentRecord, Subject, AssessmentType } from '../types';
 
@@ -7,9 +6,11 @@ interface Props {
   subjects: Subject[];
   addEvent: (e: AssessmentRecord) => void;
   removeEvent: (id: string) => void;
+  // User's current grade to automatically set as targetGrade for new events
+  userGrade?: string;
 }
 
-const Calendar: React.FC<Props> = ({ events, subjects, addEvent, removeEvent }) => {
+const Calendar: React.FC<Props> = ({ events, subjects, addEvent, removeEvent, userGrade }) => {
   const [isAdding, setIsAdding] = useState(false);
   const [newEvent, setNewEvent] = useState({
     subjectId: '',
@@ -22,13 +23,19 @@ const Calendar: React.FC<Props> = ({ events, subjects, addEvent, removeEvent }) 
     e.preventDefault();
     if (!newEvent.subjectId) return;
 
+    // Find the subject to include its name in the record
+    const subject = subjects.find(s => s.id === newEvent.subjectId);
+
+    // Fix: targetGrade is required in AssessmentRecord (1-based line 25 fix)
     addEvent({
       id: Date.now().toString(),
       subjectId: newEvent.subjectId,
+      subjectName: subject?.name,
       type: newEvent.type,
       date: newEvent.date,
       content: newEvent.content,
-      grade: 0
+      grade: 0,
+      targetGrade: userGrade || ''
     });
     setIsAdding(false);
     setNewEvent({ ...newEvent, content: '' });
