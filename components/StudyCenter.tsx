@@ -67,10 +67,38 @@ const StudyCenter: React.FC<Props> = ({ data, onUpdateSession, onUpdateGroups })
     setNewGroupData({ name: '', desc: '', privacy: 'public' });
   };
 
+  // Normalização para comparação (remove hifens e espaços extras)
+  const normalize = (str: string) => str.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+  // Filtra grupos: mostra o oficial da turma DELE e grupos customizados públicos/privados que ele participa
+  const filteredGroups = data.studyGroups.filter(group => {
+    if (group.isOfficial) {
+      // Verifica se o nome do grupo contém a série do aluno (ex: "1º Ano" no grupo "1º Ano - Médio")
+      return normalize(group.name).includes(normalize(data.user?.grade || ''));
+    }
+    // Para grupos customizados, mostramos se for público ou se ele for o "dono" (id customizado dele)
+    return group.privacy === 'public' || group.id.startsWith('custom-');
+  });
+
   const activeGroup = data.studyGroups.find(g => g.id === activeGroupId);
 
+  // Verifica se o aluno pode enviar mensagem no grupo selecionado
+  const canChat = (group: StudyGroup) => {
+    if (group.isOfficial) {
+      return normalize(group.name).includes(normalize(data.user?.grade || ''));
+    }
+    // Grupos customizados: por enquanto permitimos se for o criador ou público
+    return true; 
+  };
+
   const sendMessage = () => {
-    if (!msgInput.trim() || !activeGroupId || !data.user) return;
+    if (!msgInput.trim() || !activeGroupId || !data.user || !activeGroup) return;
+    
+    if (!canChat(activeGroup)) {
+      alert("Você só pode enviar mensagens no grupo oficial da sua turma.");
+      return;
+    }
+
     const newMessage: ChatMessage = {
       id: Date.now().toString(),
       sender: data.user.name.split(' ')[0],
@@ -143,19 +171,25 @@ const StudyCenter: React.FC<Props> = ({ data, onUpdateSession, onUpdateGroups })
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-2 space-y-1">
-              {data.studyGroups.map(group => (
+              {filteredGroups.length === 0 && (
+                <p className="text-[10px] text-slate-400 text-center py-10 font-bold uppercase">Nenhum grupo disponível</p>
+              )}
+              {filteredGroups.map(group => (
                 <button 
                   key={group.id}
                   onClick={() => setActiveGroupId(group.id)}
                   className={`w-full text-left p-4 rounded-xl transition-all border ${activeGroupId === group.id ? 'bg-slate-900 border-slate-900 text-white shadow-md' : 'bg-transparent border-transparent hover:bg-slate-50'}`}
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <p className="text-[8px] font-black uppercase tracking-widest opacity-60">{group.category}</p>
+                    <p className={`text-[8px] font-black uppercase tracking-widest ${activeGroupId === group.id ? 'text-amber-400' : 'text-slate-400 opacity-60'}`}>
+                      {group.isOfficial ? 'Oficial' : group.category}
+                    </p>
                     <span className="text-[10px] opacity-70">
                       {group.privacy === 'private' ? '🔒' : '🌐'}
                     </span>
                   </div>
                   <span className="font-bold block text-sm leading-tight">{group.name}</span>
+                  {group.isOfficial && <span className="text-[8px] mt-1 inline-block bg-amber-400 text-slate-900 px-1.5 py-0.5 rounded font-black uppercase">Sua Turma</span>}
                 </button>
               ))}
             </div>
@@ -177,10 +211,16 @@ const StudyCenter: React.FC<Props> = ({ data, onUpdateSession, onUpdateGroups })
                 </div>
                 
                 <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/30">
+                  {!canChat(activeGroup) && (
+                    <div className="bg-amber-50 border border-amber-100 p-4 rounded-2xl text-center">
+                      <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">Visualização Apenas</p>
+                      <p className="text-xs text-amber-500 font-medium">Você só pode conversar no grupo da sua própria turma.</p>
+                    </div>
+                  )}
                   {activeGroup.messages.length === 0 && (
                     <div className="flex flex-col items-center justify-center h-full text-slate-300">
                       <span className="text-4xl mb-4">💬</span>
-                      <p className="text-xs font-bold uppercase tracking-widest">Inicie a conversa!</p>
+                      <p className="text-xs font-bold uppercase tracking-widest">Nenhuma mensagem ainda</p>
                     </div>
                   )}
                   {activeGroup.messages.map(msg => (
@@ -194,23 +234,24 @@ const StudyCenter: React.FC<Props> = ({ data, onUpdateSession, onUpdateGroups })
                   ))}
                 </div>
 
-                <div className="p-3 bg-white border-t border-slate-100 flex items-center space-x-2">
+                <div className={`p-3 bg-white border-t border-slate-100 flex items-center space-x-2 ${!canChat(activeGroup) ? 'opacity-50 grayscale pointer-events-none' : ''}`}>
                   <input 
                     type="text" 
+                    disabled={!canChat(activeGroup)}
                     value={msgInput}
                     onChange={e => setMsgInput(e.target.value)}
                     onKeyPress={e => e.key === 'Enter' && sendMessage()}
-                    placeholder="Mensagem..."
+                    placeholder={canChat(activeGroup) ? "Mensagem..." : "Chat bloqueado para esta turma"}
                     className="flex-1 bg-slate-50 border-none rounded-xl px-4 py-3 text-sm focus:ring-1 focus:ring-slate-900 outline-none"
                   />
-                  <button onClick={sendMessage} className="w-12 h-12 bg-slate-900 text-amber-400 rounded-xl flex items-center justify-center active:scale-90 transition-transform shadow-lg shadow-slate-900/10">🚀</button>
+                  <button onClick={sendMessage} disabled={!canChat(activeGroup)} className="w-12 h-12 bg-slate-900 text-amber-400 rounded-xl flex items-center justify-center active:scale-90 transition-transform shadow-lg shadow-slate-900/10">🚀</button>
                 </div>
               </>
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center text-slate-300 p-8 text-center">
                 <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-6 text-3xl">🤝</div>
                 <p className="text-sm font-black uppercase tracking-widest">Escolha um grupo para colaborar</p>
-                <p className="text-xs mt-2 max-w-xs text-slate-400">Tire dúvidas, compartilhe resumos e foque nos objetivos com seus colegas.</p>
+                <p className="text-xs mt-2 max-w-xs text-slate-400">Tire dúvidas, compartilhe resumos e foque nos objetivos com seus colegas da sua turma.</p>
               </div>
             )}
           </div>
